@@ -1,6 +1,46 @@
 import tf, { train } from '@tensorflow/tfjs-node';
 
 
+function gerarDados(quantidade) {
+    const xs = [];
+    const ys = [];
+
+    for (let i = 0; i < quantidade; i++) {
+        // Idade aleatória entre 18 e 60 (normalizada)
+        const idadeRaw = Math.floor(Math.random() * (60 - 18 + 1)) + 18;
+        const idadeNorm = (idadeRaw - 18) / (60 - 18);
+
+        // Cores (One-hot: azul, vermelho, verde)
+        const cores = [0, 0, 0];
+        const corIdx = Math.floor(Math.random() * 3);
+        cores[corIdx] = 1;
+
+        // Cidades (One-hot: SP, Rio, Curitiba)
+        const cidades = [0, 0, 0];
+        const cidIdx = Math.floor(Math.random() * 3);
+        cidades[cidIdx] = 1;
+
+        // Unindo entradas [idade, azul, vermelho, verde, SP, Rio, Curitiba]
+        xs.push([idadeNorm, ...cores, ...cidades]);
+
+        // Lógica de Negócio para a IA aprender:
+        // Se for jovem (<30) e de SP, ou gostar de Azul -> Premium [1,0,0]
+        // Se for meia idade (30-45) -> Medium [0,1,0]
+        // Se for mais velho (>45) -> Basic [0,0,1]
+        if (idadeRaw < 30 && (cidIdx === 0 || corIdx === 0)) {
+            ys.push([1, 0, 0]);
+        } else if (idadeRaw <= 45) {
+            ys.push([0, 1, 0]);
+        } else {
+            ys.push([0, 0, 1]);
+        }
+    }
+    return { 
+        xs: tf.tensor2d(xs), 
+        ys: tf.tensor2d(ys) 
+    };
+}
+
 async function trainModel(xs, ys) {
     // Criamos um modelo sequencial simples
     const model = tf.sequential();
@@ -59,6 +99,31 @@ async function trainModel(xs, ys) {
     return model;
 }
 
+async function predict(model, pessoatensorNormalizada) {
+
+    // transformar o array de entrada em um tensor 2D, pois o modelo espera uma matriz de entradas
+    const inputTensor = tf.tensor2d(pessoatensorNormalizada);
+
+    // faz a previsão usando o modelo treinado
+    const prediction = model.predict(inputTensor);
+
+    const predArray = await prediction.array(); // Converte o tensor de previsão para um array JavaScript
+
+    return predArray[0].map((prob, index) => ({ prob, index })); // Retorna a previsão para a primeira (e única) pessoa
+
+    // // obtemos os scores de cada categoria (premium, medium, basic)
+    // const scores = prediction.dataSync(); // Extrai os valores do tensor de previsão
+
+    // // encontramos o índice da categoria com a maior pontuação
+    // const predictedIndex = scores.indexOf(Math.max(...scores));
+
+    // // mapeamos o índice para o nome da categoria correspondente
+    // const predictedCategory = labelsNomes[predictedIndex];
+
+    // console.log(`Previsão para ${pessoa.nome}: ${predictedCategory} (scores: ${scores})`);
+}
+
+
 // Exemplo de pessoas para treino (cada pessoa com idade, cor e localização)
 // const pessoas = [
 //     { nome: "Erick", idade: 30, cor: "azul", localizacao: "São Paulo" },
@@ -91,6 +156,27 @@ const tensorLabels = [
     [0, 0, 1]  // basic - Carlos
 ];
 
+const dadosTreino = gerarDados(200);
+
+const pessoa = { nome: "Evandson", idade: 28, cor: "verde", localizacao: "Curitiba" }
+
+// normalizando a idade da nova pessoa usando o mesmo padrão do treino
+// exemplo de normalização: (idade - idade_min) / (idade_max - idade_min)
+// (28 - 25) / (40 - 25) = 0.2
+const idadeNormalizada = (pessoa.idade - 25) / (40 - 25); // Normalizando a idade
+
+const pessoatensorNormalizada = [
+    [
+        idadeNormalizada, // idade normalizada
+        0, // cor azul
+        0, // cor vermelho
+        1, // cor verde (one-hot encoded)
+        0, // localização São Paulo
+        0, // localização Rio
+        1 // localização Curitiba
+    ]
+]
+
 // Criamos tensores de entrada (xs) e saída (ys) para treinar o modelo
 const inputXs = tf.tensor2d(tensorPessoasNormalizado)
 const outputYs = tf.tensor2d(tensorLabels)
@@ -99,9 +185,14 @@ const outputYs = tf.tensor2d(tensorLabels)
 // Treinamos o modelo usando os tensores de entrada e saída
 // quanto mais dados melhor
 // assim o algoritmo consegue entender melhor as relações entre as características e as categorias, melhorando a precisão das previsões
-const model = trainModel(inputXs, outputYs);
+const model = await trainModel(dadosTreino.xs, dadosTreino.ys);
 
-
+const prediction = await predict(model, pessoatensorNormalizada);
+const results = prediction
+    .sort((a, b) => b.prob - a.prob)
+    .map(p => `${labelsNomes[p.index]} (${(p.prob * 100).toFixed(2)}%)`)
+    .join('\n')
+console.log(`Previsão para ${pessoa.nome}:\n${results}`);
 
 // inputXs.print();
 // outputYs.print();
