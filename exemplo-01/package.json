@@ -1,0 +1,11 @@
+{
+  "name": "exemplo-01",
+  "version": "1.0.0",
+  "type": "module", 
+  "scripts": {
+    "start": "node --no-warnings --watch index.js"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "4.22"
+  }
+}
