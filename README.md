@@ -1,0 +1,1 @@
+# treinando_primeira_rede_neural
